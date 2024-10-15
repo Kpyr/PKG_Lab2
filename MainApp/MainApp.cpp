@@ -1,4 +1,19 @@
-﻿//#include <iostream>
+﻿/*============================================
+    Групповой вариант #4
+
+
+
+============================================*/
+
+
+
+
+
+
+
+
+
+//#include <iostream>
 //#include <fstream>
 //#include <vector>
 //#include <SFML/Graphics.hpp>
