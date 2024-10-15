@@ -103,16 +103,16 @@ int main() {
     writeNumber(file, bitsPerPixel);
 
     // Записываем количество значений палитры (2 байта)
-    uint16_t paletteEntries = 3;
+    uint16_t paletteEntries = 5;
     writeNumber(file, paletteEntries);
 
     // Записываем записи палитры
-    std::vector<uint16_t> angles = { 120, 120, 120 };
-    std::vector<uint16_t> lengths = { 15, 15, 15};
-    std::vector<uint8_t> rValues = { 255, 0, 0};
-    std::vector<uint8_t> gValues = { 0, 255, 0};
-    std::vector<uint8_t> bValues = { 0, 0, 255};
-    std::vector<uint8_t> aValues = { 255, 255, 255};
+    std::vector<uint16_t> angles = { 40, 40, 40, 40, 40};
+    std::vector<uint16_t> lengths = { 15, 15, 15, 15, 15};
+    std::vector<uint8_t> rValues = { 255, 0, 0, 125, 255, 0};
+    std::vector<uint8_t> gValues = { 0, 255, 0, 50, 111, 175};
+    std::vector<uint8_t> bValues = { 0, 0, 255, 76, 10, 185};
+    std::vector<uint8_t> aValues = { 255, 255, 255, 255, 255};
 
     for (size_t i = 0; i < paletteEntries; ++i) {
         writeNumber(file, angles[i]);
@@ -124,8 +124,8 @@ int main() {
     }
 
     // Записываем пиксели (вещественные числа X и Y, 2 байта каждое)
-    std::vector<float> xValues = { 35.5f, -140.75f, 25.0f, 100.0f, -200.0f, -59.5f};
-    std::vector<float> yValues = { 40.3f, 100.6f, -350.9f, -50.0f, 150.0f, 300.0f};
+    std::vector<float> xValues = { 35.5f, -140.75f, 25.0f, 100.0f, -200.0f, -59.5f, -250.0f};
+    std::vector<float> yValues = { 40.3f, 100.6f, -350.9f, -50.0f, 150.0f, 300.0f, -250.0f};
 
     for (size_t i = 0; i < xValues.size(); ++i) {
         writeNumber(file, xValues[i]);
