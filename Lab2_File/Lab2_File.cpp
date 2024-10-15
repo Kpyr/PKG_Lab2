@@ -68,6 +68,9 @@
 
 
 
+/* V3 ====== V3 ======= V3 ====== V3 ======= V3 ====== V3 ======= V3 ====== V3 ======= V3*/
+
+
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -83,7 +86,7 @@ void writeNumber(std::ofstream& file, T value) {
 
 int main() {
     // Открываем файл для записи в бинарном режиме
-    std::ofstream file("D:/Visual Studio/Lab2/Lab2_File/MainApp/test.ya3", std::ios::binary);
+    std::ofstream file("E:/Отчеты/Гуляев/PKG_Lab2/MainApp/test.ya3", std::ios::binary);
     if (!file) {
         std::cerr << "Не удалось открыть файл для записи." << std::endl;
         return 1;
@@ -121,8 +124,8 @@ int main() {
     }
 
     // Записываем пиксели (вещественные числа X и Y, 2 байта каждое)
-    std::vector<float> xValues = { 35.5f, -140.75f, 0.25f };
-    std::vector<float> yValues = { 40.3f, 100.6f, -150.9f };
+    std::vector<float> xValues = { 35.5f, -140.75f, 25.0f, 100.0f, -200.0f, -59.5f};
+    std::vector<float> yValues = { 40.3f, 100.6f, -350.9f, -50.0f, 150.0f, 300.0f};
 
     for (size_t i = 0; i < xValues.size(); ++i) {
         writeNumber(file, xValues[i]);
@@ -135,3 +138,7 @@ int main() {
     std::cout << "Файл test.ya3 успешно создан." << std::endl;
     return 0;
 }
+
+
+/* V4 ====== V4 ======= V4 ====== V4 ======= V4 ====== V4 ======= V4 ====== V4 ======= V4*/
+
