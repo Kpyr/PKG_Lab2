@@ -105,9 +105,6 @@ std::vector<sf::CircleShape> loadFile(const std::string& filename, uint16_t& wid
         for (size_t j = 0; j < paletteEntries; ++j) {
             float sectorAngle = angles[j] * 3.14159265f / 180.0f;
 
-            /*if (i == 2) {
-                std::cout <<"ID: " << j << " " << angle << ' ' << totalAngle << " " << sectorAngle << " " << angles[j] << std::endl;
-            } */
             if (angle >= totalAngle && angle < totalAngle + sectorAngle + 1e-5f) {
                 sectorIndex = j;
                 break;
@@ -136,7 +133,8 @@ int main() {
     sf::RenderWindow window(sf::VideoMode::getDesktopMode(), "Lab2_GUI", sf::Style::Default);
     ImGui::SFML::Init(window);
 
-    std::string filename = "test.ya3";
+    std::string filename = "";
+    std::string TmpFilename = "";
     bool renderFile = false;  // Флаг для рендеринга
 
     bool CreateFile = false;
@@ -145,6 +143,11 @@ int main() {
     bool isPalletSet = false;
 
     bool pixelsNotEmpty = false;
+
+    bool isValidExtension = true;
+
+
+    bool isValidName = true;
 
     std::vector<sf::CircleShape> pixelShapes;
     uint16_t imageWidth = 0, imageHeight = 0;
@@ -205,7 +208,7 @@ int main() {
                 }
                 if (ImGui::Button("Read File")) {
                     // Сбрасываем имя файла
-                    filename = "test.ya3";
+                    filename = "example.ya3";
                     ReadFile = true;
                 }
                 ImGui::End();
@@ -296,12 +299,42 @@ int main() {
             // Если пользователь выбрал чтение файла
             if (ReadFile) {
                 ImGui::Begin("Read File");
-                //ImGui::InputText("Filename", &filename);
-                ImGui::InputText("File Name: ", &filename[0], filename.size());
+                ImGui::InputText("File Name", &filename[0], filename.size()+1);
+                
                 if (ImGui::Button("Done!")) {
-                    pixelShapes = loadFile(filename, imageWidth, imageHeight);
-                    renderFile = true;  // Включаем рендеринг
+					std::string tmpString;
+                    bool fl = true;
+                    for (int i = 0; i < filename.length()-4; i++) {
+
+                        if(filename[i] == '.' && filename[i+1] == 'y'&& filename[i+2] == 'a'&& filename[i+3] == '3'){
+
+                            tmpString.append(".ya3");
+                            break;
+                        }
+                        tmpString.push_back(filename[i]);
+                    }
+                    
+					isValidName = tmpString.length() >= 5 && tmpString.substr(tmpString.length() - 4) == ".ya3";
+                    int ts = tmpString.length();
+                    if (isValidName) {
+                        std::ifstream file1(filename, std::ios::binary);
+                        if (!file1) {
+                            isValidName = false;
+                        }
+                        else {
+                            file1.close();
+                            pixelShapes = loadFile(tmpString, imageWidth, imageHeight);
+                            renderFile = true;  // Включаем рендеринг
+                        }
+                        
+                    }
+           
                 }
+
+				if (isValidName == false) {
+					ImGui::TextColored(ImVec4(1, 0, 0, 1), "File not exist OR Please enter a valid filename with '.ya3' extension.");
+				}
+
                 ImGui::End();
             }
         }
