@@ -51,8 +51,7 @@ std::vector<sf::RectangleShape> loadFile(const std::string& filename, uint16_t& 
     std::ifstream file(filename, std::ios::binary);
     std::vector<sf::RectangleShape> pixelShapes;
 
-	bool isCorrect = false;
-    
+    bool isCorrect = false;
 
     if (!file) {
         std::cerr << "Не удалось открыть файл." << std::endl;
@@ -62,12 +61,14 @@ std::vector<sf::RectangleShape> loadFile(const std::string& filename, uint16_t& 
         isCorrect = true;
     }
 
-
     // Чтение параметров изображения
     width = readNumber<uint16_t>(file);
     height = readNumber<uint16_t>(file);
     uint8_t bitsPerPixel = readNumber<uint8_t>(file);
     uint16_t paletteEntries = readNumber<uint16_t>(file);
+
+    std::vector<sf::Vector2f> recoloredPixels;
+    std::vector<std::vector<int>> newColors;
 
     std::vector<uint16_t> angles(paletteEntries);
     std::vector<uint8_t> rValues(paletteEntries);
@@ -86,7 +87,6 @@ std::vector<sf::RectangleShape> loadFile(const std::string& filename, uint16_t& 
         entry.g = readNumber<uint8_t>(file);
         entry.b = readNumber<uint8_t>(file);
         entry.a = readNumber<uint8_t>(file);
-		
 
         angles[id] = entry.angle;
         rValues[id] = entry.r;
@@ -98,35 +98,91 @@ std::vector<sf::RectangleShape> loadFile(const std::string& filename, uint16_t& 
 
     // Чтение координат пикселей
     std::vector<sf::Vector2f> pixels;
-	std::vector<int> scales;
-	int tmpScale = 1;
+    std::vector<int> scales;
+    std::vector<int> newScales;
+    int tmpScale = 1;
+
+
+    float x = readNumber<float>(file);
+    float y = readNumber<float>(file);
+    int scale = readNumber<uint16_t>(file);
+    if (file) {
+        pixels.emplace_back(x, y);
+        scales.emplace_back(scale);
+        tmpScale = scales[0];
+    }
+
+
+    for (int i = 0; i < ((width/tmpScale) * (height/tmpScale)) - 1; i++) {
+        float x = readNumber<float>(file);
+        float y = readNumber<float>(file);
+        int scale = readNumber<uint16_t>(file);
+        if (file) {
+            pixels.emplace_back(x, y);
+            scales.emplace_back(scale);
+            tmpScale = scales[0];
+        }
+    }
+
     while (file) {
         float x = readNumber<float>(file);
         float y = readNumber<float>(file);
-		int scale = readNumber<uint16_t>(file);
+        int scale = readNumber<uint16_t>(file);
+
+        int r = readNumber<uint8_t>(file);
+        int g = readNumber<uint8_t>(file);
+        int b = readNumber<uint8_t>(file);
+        int a = readNumber<uint8_t>(file);
+
         if (file) {
-            pixels.emplace_back(x, y);
-			scales.emplace_back(scale);
+            recoloredPixels.emplace_back(x, y);
+            newScales.emplace_back(scale);
+            newColors.push_back({ r, g, b, a });
         }
     }
     file.close();
 
-	tmpScale = scales[0];
+    /*while (file) {
+        float x = readNumber<float>(file);
+        float y = readNumber<float>(file);
+        int scale = readNumber<uint16_t>(file);
+        if (file) {
+            pixels.emplace_back(x, y);
+            scales.emplace_back(scale);
+        }
+    }*/
+    //file.close();
 
-	float tempWidth = 0;
+    tmpScale = scales[0];
+
+    float tempWidth = 0;
     float tempHeight = 0;
 
     int tmpID = 0;
 
+    std::vector<std::vector<float>> allPixelsPos;
+    std::vector<std::vector<int>> idPixelsPos;
+
     // Создание фигур для пикселей
     sf::Vector2f center(std::min(1920, 1080) / 2.0f, std::min(1920, 1080) / 2.0f);
+    int _id1 = 0;
+    int _id2 = 0;
+
+    int id1 = width / tmpScale;
+    int id2 = height / tmpScale;
+
     for (const auto& pixel : pixels) {
-
-        
-
-
         sf::Vector2f pos = pixel + center;
-		sf::Vector2f pixelPos = sf::Vector2f(center.x + tempWidth + tmpScale, center.y + tempHeight + tmpScale);
+        sf::Vector2f pixelPos = sf::Vector2f(center.x + tempWidth + tmpScale, center.y + tempHeight + tmpScale);
+        allPixelsPos.push_back({ pixelPos.x, pixelPos.y });
+        idPixelsPos.push_back({_id1,_id2});
+
+        _id1++;
+        if (_id1 == id1) {
+            _id1 = 0;
+            _id2++;
+        }
+
         sf::Vector2f delta = pos - center;
 
         float distance = std::sqrt(delta.x * delta.x + delta.y * delta.y);
@@ -146,35 +202,141 @@ std::vector<sf::RectangleShape> loadFile(const std::string& filename, uint16_t& 
                 break;
             }
             totalAngle += sectorAngle;
-
         }
 
         float radius = std::min(width, height) / 2.0f;
 
-        if (sectorIndex != -1){
-            //sf::CircleShape shape(2.0f * tmpScale);
-			sf::RectangleShape shape(sf::Vector2f(1.0f * tmpScale, 1.0f * tmpScale));
+        if (sectorIndex != -1) {
+            sf::RectangleShape shape(sf::Vector2f(1.0f * tmpScale, 1.0f * tmpScale));
             shape.setPosition(pixelPos);
             sf::Color color(rValues[sectorIndex], gValues[sectorIndex], bValues[sectorIndex], aValues[sectorIndex]);
-            //sf::Color color(255,0,0,255);
-            shape.setFillColor(color);  
+            shape.setFillColor(color);
+
+            // Добавляем обводку
+            shape.setOutlineThickness(1.0f);  // Толщина обводки
+            shape.setOutlineColor(sf::Color(192, 192, 192));  // Светло-серый цвет
+
             pixelShapes.push_back(shape);
         }
-
 
         tempWidth += tmpScale;
         tmpID += tmpScale;
         if (tmpID >= width) {
             tempWidth = 0;
             tmpID = 0;
-            tempHeight+= tmpScale;
+            tempHeight += tmpScale;
         }
+    }
+
+    
+    for (size_t i = 0; i < recoloredPixels.size(); ++i) {
         
+        
+        int id = 0;
+
+        sf::Vector2f pixelPos;
+        pixelPos.x = recoloredPixels[i].x;
+        pixelPos.y = recoloredPixels[i].y;
+
+        int tm1 = 0, tm2 = 0;
+        while (tm1 != (int)pixelPos.x && tm2 != (int)pixelPos.y)
+        {
+
+            if (tm1 == id1) {
+                tm1 = 0;
+                tm2 ++;
+            }
+
+            if (tm1 > id1 || tm2 > id2) {
+                break;
+            }
+            id++;
+        }
+
+        sf::Color color(newColors[i][0], newColors[i][1], newColors[i][2], newColors[i][3]);
+        pixelShapes[id].setFillColor(color);
+    
     }
 
     return pixelShapes;
 }
 
+// Функция для изменения контрастности
+void adjustContrast(const std::string& inputFilename, const std::string& outputFilename, float contrastFactor) {
+    std::ifstream inputFile(inputFilename, std::ios::binary);
+    if (!inputFile) {
+        std::cerr << "Не удалось открыть исходный файл." << std::endl;
+        return;
+    }
+
+    // Чтение параметров изображения
+    uint16_t width = readNumber<uint16_t>(inputFile);
+    uint16_t height = readNumber<uint16_t>(inputFile);
+    uint8_t bitsPerPixel = readNumber<uint8_t>(inputFile);
+    uint16_t paletteEntries = readNumber<uint16_t>(inputFile);
+
+    std::vector<PaletteEntry> palette(paletteEntries);
+    for (auto& entry : palette) {
+        entry.angle = readNumber<uint16_t>(inputFile);
+        entry.length = readNumber<uint16_t>(inputFile);
+        entry.r = readNumber<uint8_t>(inputFile);
+        entry.g = readNumber<uint8_t>(inputFile);
+        entry.b = readNumber<uint8_t>(inputFile);
+        entry.a = readNumber<uint8_t>(inputFile);
+    }
+
+    uint16_t scale;
+
+    // Чтение пикселей
+    std::vector<sf::Vector2f> pixels;
+    while (inputFile) {
+        float x = readNumber<float>(inputFile);
+        float y = readNumber<float>(inputFile);
+        uint16_t tmpScale = readNumber<uint16_t>(inputFile);
+        if (inputFile) {
+            pixels.emplace_back(x, y);
+            scale = tmpScale;
+        }
+    }
+    inputFile.close();
+
+    // Применение контрастности к палитре
+    for (auto& entry : palette) {
+        entry.r = clamp<int>((((entry.r - 128) * contrastFactor) + 128), 0, 255);
+        entry.g = clamp<int>((((entry.g - 128) * contrastFactor) + 128), 0, 255);
+        entry.b = clamp<int>((((entry.b - 128) * contrastFactor) + 128), 0, 255);
+        // 
+    }
+
+    // Запись в новый файл
+    std::ofstream outputFile(outputFilename, std::ios::binary);
+    if (!outputFile) {
+        std::cerr << "Не удалось создать выходной файл." << std::endl;
+        return;
+    }
+
+    writeNumber(outputFile, width);
+    writeNumber(outputFile, height);
+    writeNumber(outputFile, bitsPerPixel);
+    writeNumber(outputFile, paletteEntries);
+
+    for (const auto& entry : palette) {
+        writeNumber(outputFile, static_cast<uint16_t>(entry.angle));
+        writeNumber(outputFile, static_cast<uint16_t>(entry.length));
+        writeNumber(outputFile, static_cast<uint8_t>(entry.r));
+        writeNumber(outputFile, static_cast<uint8_t>(entry.g));
+        writeNumber(outputFile, static_cast<uint8_t>(entry.b));
+        writeNumber(outputFile, static_cast<uint8_t>(entry.a));
+    }
+
+    for (const auto& pixel : pixels) {
+        writeNumber(outputFile, pixel.x);
+        writeNumber(outputFile, pixel.y);
+        writeNumber(outputFile, (uint16_t)(scale));
+    }
+
+    outputFile.close();
+}
 
 void scaleImage(const std::string& inputFilename, const std::string& outputFilename, int scaleFactor) {
     // Открытие исходного файла
@@ -254,14 +416,151 @@ void scaleImage(const std::string& inputFilename, const std::string& outputFilen
     for (const auto& pixel : scaledPixels) {
         writeNumber(outputFile, pixel.x);
         writeNumber(outputFile, pixel.y);
-		writeNumber(outputFile, (uint16_t)(scaleFactor * (int)scale));
+        writeNumber(outputFile, (uint16_t)(scaleFactor * (int)scale));
     }
 
     outputFile.close();
 }
 
-//Основной код UI и логики
+// Функция для изменения цвета пикселя в указанных координатах
+void changePixelColor(const std::string& filename, float _x, float _y, int _r, int _g, int _b, int _a) {
+    std::ifstream inputFile(filename, std::ios::binary);
+    if (!inputFile) {
+        std::cerr << "Не удалось открыть исходный файл." << std::endl;
+        return;
+    }
 
+    // Чтение параметров изображения
+    uint16_t width = readNumber<uint16_t>(inputFile);
+    uint16_t height = readNumber<uint16_t>(inputFile);
+    uint8_t bitsPerPixel = readNumber<uint8_t>(inputFile);
+    uint16_t paletteEntries = readNumber<uint16_t>(inputFile);
+
+    std::vector<PaletteEntry> palette(paletteEntries);
+    for (auto& entry : palette) {
+        entry.angle = readNumber<uint16_t>(inputFile);
+        entry.length = readNumber<uint16_t>(inputFile);
+        entry.r = readNumber<uint8_t>(inputFile);
+        entry.g = readNumber<uint8_t>(inputFile);
+        entry.b = readNumber<uint8_t>(inputFile);
+        entry.a = readNumber<uint8_t>(inputFile);
+    }
+
+    uint16_t scale;
+
+    // Чтение пикселей
+    std::vector<sf::Vector2f> pixels;
+    std::vector<int> scales;
+    std::vector<int> newScales;
+
+
+    std::vector<sf::Vector2f> recoloredPixels;
+    std::vector<std::vector<int>> newColors;
+
+    int tmpScale;
+
+    float x = readNumber<float>(inputFile);
+    float y = readNumber<float>(inputFile);
+    scale = readNumber<uint16_t>(inputFile);
+    if (inputFile) {
+        pixels.emplace_back(x, y);
+        scales.emplace_back(scale);
+        tmpScale = scales[0];
+    }
+
+    for (int i = 0; i < ((width/ tmpScale) * (height/ tmpScale)) - 1; i++) {
+        float x = readNumber<float>(inputFile);
+        float y = readNumber<float>(inputFile);
+        uint16_t tmpScale = readNumber<uint16_t>(inputFile);
+        if (inputFile) {
+            pixels.emplace_back(x, y);
+            scales.emplace_back(tmpScale);
+        }
+    }
+
+
+    while (inputFile) {
+        float x = readNumber<float>(inputFile);
+        float y = readNumber<float>(inputFile);
+        int scale = readNumber<uint16_t>(inputFile);
+
+        uint8_t r = readNumber<uint8_t>(inputFile);
+        uint8_t g = readNumber<uint8_t>(inputFile);
+        uint8_t b = readNumber<uint8_t>(inputFile);
+        uint8_t a = readNumber<uint8_t>(inputFile);
+
+        if (inputFile) {
+            recoloredPixels.emplace_back(x, y);
+            newScales.emplace_back(scale);
+            newColors.push_back({ (int)r, (int)g, (int)b, (int)a });
+        }
+    }
+
+    inputFile.close();
+
+    // Изменение цвета пикселя в указанных координатах
+    /*for (size_t i = 0; i < pixels.size(); ++i) {
+        if (static_cast<int>(pixels[i].x) == x && static_cast<int>(pixels[i].y) == y) {
+            palette[i % paletteEntries].r = r;
+            palette[i % paletteEntries].g = g;
+            palette[i % paletteEntries].b = b;
+            palette[i % paletteEntries].a = a;
+            break;
+        }
+    }*/
+
+    // Запись в файл
+    std::ofstream outputFile(filename, std::ios::binary);
+    if (!outputFile) {
+        std::cerr << "Не удалось открыть выходной файл для записи." << std::endl;
+        return;
+    }
+
+    writeNumber(outputFile, width);
+    writeNumber(outputFile, height);
+    writeNumber(outputFile, bitsPerPixel);
+    writeNumber(outputFile, paletteEntries);
+
+    for (const auto& entry : palette) {
+        writeNumber(outputFile, static_cast<uint16_t>(entry.angle));
+        writeNumber(outputFile, static_cast<uint16_t>(entry.length));
+        writeNumber(outputFile, static_cast<uint8_t>(entry.r));
+        writeNumber(outputFile, static_cast<uint8_t>(entry.g));
+        writeNumber(outputFile, static_cast<uint8_t>(entry.b));
+        writeNumber(outputFile, static_cast<uint8_t>(entry.a));
+    }
+
+    for (size_t i = 0; i < pixels.size(); ++i) {
+        writeNumber(outputFile, pixels[i].x);
+        writeNumber(outputFile, pixels[i].y);
+        writeNumber(outputFile, static_cast<uint16_t>(scales[i]));
+    }
+
+    for (size_t i = 0; i < recoloredPixels.size(); ++i) {
+        writeNumber(outputFile, recoloredPixels[i].x);
+        writeNumber(outputFile, recoloredPixels[i].y);
+        writeNumber(outputFile, static_cast<uint16_t>(newScales[i]));
+
+        writeNumber(outputFile, static_cast<uint8_t>(newColors[i][0]));
+        writeNumber(outputFile, static_cast<uint8_t>(newColors[i][1]));
+        writeNumber(outputFile, static_cast<uint8_t>(newColors[i][2]));
+        writeNumber(outputFile, static_cast<uint8_t>(newColors[i][3]));
+    }
+
+    writeNumber(outputFile, _x);
+    writeNumber(outputFile, _y);
+    writeNumber(outputFile, static_cast<uint16_t>(scales[0]));
+
+    writeNumber(outputFile, static_cast<uint8_t>(_r));
+    writeNumber(outputFile, static_cast<uint8_t>(_g));
+    writeNumber(outputFile, static_cast<uint8_t>(_b));
+    writeNumber(outputFile, static_cast<uint8_t>(_a));
+
+    outputFile.close();
+}
+
+
+// Основной код UI и логики
 int main() {
     sf::RenderWindow window(sf::VideoMode::getDesktopMode(), "Lab2_GUI", sf::Style::Default);
     ImGui::SFML::Init(window);
@@ -271,16 +570,18 @@ int main() {
     std::string inputFilename = "";
     std::string outputFilename = "";
 
-	int scale = 20;
+    int scale = 20;
 
     bool renderFile = false;  // Флаг для рендеринга
 
     bool CreateFile = false;
     bool ReadFile = false;
     bool ScaleFile = false;
+    bool AdjustContrast = false;
+    bool ChangePixelColor = false;
 
     bool isPalletSet = false;
-	bool isSizeSet = false;
+    bool isSizeSet = false;
 
     bool pixelsNotEmpty = false;
 
@@ -291,15 +592,19 @@ int main() {
 
     bool isValidName = true;
 
+    float contrastFactor = 1.0f;
+
+    int x = 0, y = 0, r = 255, g = 255, b = 255, a = 255;
+
     std::vector<sf::RectangleShape> pixelShapes;
     uint16_t imageWidth = 0, imageHeight = 0;
 
     // Данные для создания файла
-    //uint16_t width = 1000, height = 1000, bitsPerPixel = 24, paletteEntries = 0;
     int width = 1000, height = 1000, bitsPerPixel = 24, paletteEntries = 0;
     std::vector<PaletteEntry> palette;
     std::vector<sf::Vector2f> pixels;
-	std::vector<int> scales;
+    std::vector<int> scales;
+
     // Основной цикл приложения
     sf::Clock deltaClock;
     while (window.isOpen()) {
@@ -313,7 +618,6 @@ int main() {
         window.clear(sf::Color::Black);
 
         if (renderFile) {
-
             for (const auto& shape : pixelShapes) {
                 window.draw(shape);
             }
@@ -325,13 +629,14 @@ int main() {
                 ReadFile = false;
                 CreateFile = false;
                 ScaleFile = false;
+                AdjustContrast = false;
                 pixelShapes.clear(); // Очищаем пиксели
             }
             ImGui::End();
         }
         else {
             // Основное меню
-            if (!CreateFile && !ReadFile && !ScaleFile) {
+            if (!CreateFile && !ReadFile && !ScaleFile && !AdjustContrast && !ChangePixelColor) {
                 ImGui::Begin("Main Menu");
                 if (ImGui::Button("Create File")) {
                     // Сбрасываем данные для создания файла
@@ -349,14 +654,23 @@ int main() {
                     ReadFile = true;
                 }
                 if (ImGui::Button("Scale File")) {
-					outputFilename = "example.ya3";
-					inputFilename = "example.ya3";
+                    outputFilename = "example.ya3";
+                    inputFilename = "example.ya3";
                     scale = 1;
                     ScaleFile = true;
                 }
+                if (ImGui::Button("Adjust Contrast")) {
+                    outputFilename = "example.ya3";
+                    inputFilename = "example.ya3";
+                    AdjustContrast = true;
+                }
+                if (ImGui::Button("Change Pixel Color")) {
+                    outputFilename = "example.ya3";
+                    inputFilename = "example.ya3";
+                    ChangePixelColor = true;
+                }
                 ImGui::End();
             }
-            
 
             // Если пользователь выбрал создание файла
             if (CreateFile == true) {
@@ -366,6 +680,7 @@ int main() {
                     ReadFile = false;
                     CreateFile = false;
                     ScaleFile = false;
+                    AdjustContrast = false;
                     pixelShapes.clear(); // Очищаем пиксели
                 }
 
@@ -373,20 +688,21 @@ int main() {
                 if (!isValidOutputName) {
                     ImGui::TextColored(ImVec4(1, 0, 0, 1), "Please enter a valid filename with '.ya3' extension.");
                 }
-                ImGui::InputInt("Width", &width);
-                ImGui::InputInt("Height", &height);
+                if (ImGui::InputInt("Width", &width)) {
+                    isSizeSet = false;
+                }
+                if (ImGui::InputInt("Height", &height)) {
+                    isSizeSet = false;
+                }
                 if (ImGui::Button("Set Size of Image")) {
                     pixels.resize(width * height);
-                    for (size_t i = 0; i < width * height; i++)
-                    {
+                    for (size_t i = 0; i < width * height; i++) {
                         pixels[i].x = 0.0f;
                         pixels[i].y = 0.0f;
                     }
                     isSizeSet = true;
                 }
                 ImGui::InputInt("Bits Per Pixel", &bitsPerPixel);
-                //ImGui::InputInt("Palette Entries", &paletteEntries);
-
                 if (ImGui::InputInt("Palette Entries", &paletteEntries)) {
                     isPalletSet = false;
                 }
@@ -402,7 +718,6 @@ int main() {
 
                         // Уникальные метки для каждого элемента
                         ImGui::InputInt(("Angle " + std::to_string(i + 1)).c_str(), &palette[i].angle);
-                        //ImGui::InputInt(("Length " + std::to_string(i + 1)).c_str(), &palette[i].length);
                         ImGui::InputInt(("R " + std::to_string(i + 1)).c_str(), &palette[i].r);
                         ImGui::InputInt(("G " + std::to_string(i + 1)).c_str(), &palette[i].g);
                         ImGui::InputInt(("B " + std::to_string(i + 1)).c_str(), &palette[i].b);
@@ -419,26 +734,20 @@ int main() {
                         ImGui::InputFloat(("X " + std::to_string(i + 1)).c_str(), &pixels[i].x);
                         ImGui::InputFloat(("Y " + std::to_string(i + 1)).c_str(), &pixels[i].y);
                         scales.push_back(scale);
-					}
-				}
+                    }
+                }
 
-                if (pixelsNotEmpty == true){
+                if (pixelsNotEmpty == true) {
                     ImGui::Text("Pixel Coordinates:");
                     for (size_t i = 0; i < pixels.size(); ++i) {
                         ImGui::Text("Pixel %d: (%.2f, %.2f)", i + 1, pixels[i].x, pixels[i].y);
                     }
                 }
 
-                
-
                 if (ImGui::Button("Done!")) {
-
                     std::string tmpString2;
-                    //bool fl = true;
                     for (int i = 0; i < outputFilename.length() - 4; i++) {
-
                         if (outputFilename[i] == '.' && outputFilename[i + 1] == 'y' && outputFilename[i + 2] == 'a' && outputFilename[i + 3] == '3') {
-
                             tmpString2.append(".ya3");
                             break;
                         }
@@ -447,8 +756,7 @@ int main() {
 
                     isValidOutputName = tmpString2.length() >= 5 && tmpString2.substr(tmpString2.length() - 4) == ".ya3";
 
-                    if (isValidOutputName){
-
+                    if (isValidOutputName) {
                         width = width * scale;
                         height = height * scale;
 
@@ -469,27 +777,18 @@ int main() {
                                 writeNumber(file, (uint8_t)entry.a);
                             }
 
-                            /*for (const auto& pixel : pixels) {
-                                writeNumber(file, pixel.x);
-                                writeNumber(file, pixel.y);
-                            
-                            }*/
-
-						    for (size_t i = 0; i < pixels.size(); ++i) {
-							    writeNumber(file, pixels[i].x);
-							    writeNumber(file, pixels[i].y);
+                            for (size_t i = 0; i < pixels.size(); ++i) {
+                                writeNumber(file, pixels[i].x);
+                                writeNumber(file, pixels[i].y);
                                 writeNumber(file, (uint16_t)scales[i]);
-						    }
-
-                        
+                            }
 
                             file.close();
-                        
+
                             pixelShapes = loadFile(outputFilename, imageWidth, imageHeight);
                             renderFile = true;  // Включаем рендеринг
                         }
                     }
-                    //ImGui::End();
                 }
                 ImGui::End();
             }
@@ -502,26 +801,23 @@ int main() {
                     ReadFile = false;
                     CreateFile = false;
                     ScaleFile = false;
+                    AdjustContrast = false;
                     pixelShapes.clear(); // Очищаем пиксели
                 }
 
                 ImGui::InputText("Input File Name", &inputFilename[0], inputFilename.size() + 1);
-				if (!isValidInputName){
-					ImGui::TextColored(ImVec4(1, 0, 0, 1), "Please enter a valid filename with '.ya3' extension.");
+                if (!isValidInputName) {
+                    ImGui::TextColored(ImVec4(1, 0, 0, 1), "Please enter a valid filename with '.ya3' extension.");
                 }
                 ImGui::InputText("Output File Name", &outputFilename[0], outputFilename.size() + 1);
                 if (!isValidOutputName) {
                     ImGui::TextColored(ImVec4(1, 0, 0, 1), "Please enter a valid filename with '.ya3' extension.");
                 }
-				ImGui::InputInt("Scale Factor", &scale);
+                ImGui::InputInt("Scale Factor", &scale);
                 if (ImGui::Button("Done!")) {
-
                     std::string tmpString;
-                    //bool fl = true;
                     for (int i = 0; i < inputFilename.length() - 4; i++) {
-
                         if (inputFilename[i] == '.' && inputFilename[i + 1] == 'y' && inputFilename[i + 2] == 'a' && inputFilename[i + 3] == '3') {
-
                             tmpString.append(".ya3");
                             break;
                         }
@@ -530,14 +826,9 @@ int main() {
 
                     isValidInputName = tmpString.length() >= 5 && tmpString.substr(tmpString.length() - 4) == ".ya3";
 
-
-
                     std::string tmpString2;
-                    //bool fl = true;
                     for (int i = 0; i < outputFilename.length() - 4; i++) {
-
                         if (outputFilename[i] == '.' && outputFilename[i + 1] == 'y' && outputFilename[i + 2] == 'a' && outputFilename[i + 3] == '3') {
-
                             tmpString2.append(".ya3");
                             break;
                         }
@@ -546,20 +837,124 @@ int main() {
 
                     isValidOutputName = tmpString2.length() >= 5 && tmpString2.substr(tmpString2.length() - 4) == ".ya3";
 
-					if (isValidInputName && isValidOutputName) {
-						scaleImage(tmpString, tmpString2, scale);
-						pixelShapes = loadFile(tmpString2, imageWidth, imageHeight);
+                    if (isValidInputName && isValidOutputName) {
+                        scaleImage(tmpString, tmpString2, scale);
+                        pixelShapes = loadFile(tmpString2, imageWidth, imageHeight);
                         ScaleFile = false;
-						renderFile = true;  // Включаем рендеринг
-					}
-					
-
+                        renderFile = true;  // Включаем рендеринг
+                    }
                 }
-
-
 
                 ImGui::End();
             }
+
+            if (AdjustContrast) {
+                ImGui::Begin("Adjust Contrast");
+
+                if (ImGui::Button("Back to menu")) {
+                    renderFile = false;  // Отключаем рендеринг
+                    ReadFile = false;
+                    CreateFile = false;
+                    ScaleFile = false;
+                    AdjustContrast = false;
+                    pixelShapes.clear(); // Очищаем пиксели
+                }
+
+                ImGui::InputText("Input File Name", &inputFilename[0], inputFilename.size() + 1);
+                if (!isValidInputName) {
+                    ImGui::TextColored(ImVec4(1, 0, 0, 1), "Please enter a valid filename with '.ya3' extension.");
+                }
+                ImGui::InputText("Output File Name", &outputFilename[0], outputFilename.size() + 1);
+                if (!isValidOutputName) {
+                    ImGui::TextColored(ImVec4(1, 0, 0, 1), "Please enter a valid filename with '.ya3' extension.");
+                }
+                
+                ImGui::InputFloat("Contrast Factor", &contrastFactor);
+                if (ImGui::Button("Done!")) {
+                    std::string tmpString;
+                    for (int i = 0; i < inputFilename.length() - 4; i++) {
+                        if (inputFilename[i] == '.' && inputFilename[i + 1] == 'y' && inputFilename[i + 2] == 'a' && inputFilename[i + 3] == '3') {
+                            tmpString.append(".ya3");
+                            break;
+                        }
+                        tmpString.push_back(inputFilename[i]);
+                    }
+
+                    isValidInputName = tmpString.length() >= 5 && tmpString.substr(tmpString.length() - 4) == ".ya3";
+
+                    std::string tmpString2;
+                    for (int i = 0; i < outputFilename.length() - 4; i++) {
+                        if (outputFilename[i] == '.' && outputFilename[i + 1] == 'y' && outputFilename[i + 2] == 'a' && outputFilename[i + 3] == '3') {
+                            tmpString2.append(".ya3");
+                            break;
+                        }
+                        tmpString2.push_back(outputFilename[i]);
+                    }
+
+                    isValidOutputName = tmpString2.length() >= 5 && tmpString2.substr(tmpString2.length() - 4) == ".ya3";
+
+                    if (isValidInputName && isValidOutputName) {
+                        adjustContrast(tmpString, tmpString2, contrastFactor);
+                        pixelShapes = loadFile(tmpString2, imageWidth, imageHeight);
+                        AdjustContrast = false;
+                        renderFile = true;  // Включаем рендеринг
+                    }
+                }
+
+                ImGui::End();
+            }
+
+            if (ChangePixelColor) {
+                ImGui::Begin("Change Pixel Color");
+
+                if (ImGui::Button("Back to menu")) {
+                    renderFile = false;  // Отключаем рендеринг
+                    ReadFile = false;
+                    CreateFile = false;
+                    ScaleFile = false;
+                    AdjustContrast = false;
+                    ChangePixelColor = false;
+                    pixelShapes.clear(); // Очищаем пиксели
+                }
+
+                ImGui::InputText("File Name", &inputFilename[0], inputFilename.size() + 1);
+                if (!isValidName) {
+                    ImGui::TextColored(ImVec4(1, 0, 0, 1), "Please enter a valid filename with '.ya3' extension.");
+                }
+
+               
+                ImGui::InputInt("X Coordinate", &x);
+                ImGui::InputInt("Y Coordinate", &y);
+                ImGui::InputInt("Red (R)", &r);
+                ImGui::InputInt("Green (G)", &g);
+                ImGui::InputInt("Blue (B)", &b);
+                ImGui::InputInt("Alpha (A)", &a);
+
+                if (ImGui::Button("Change Color")) {
+                    /*std::string tmpString;
+                    for (int i = 0; i < filename.length() - 4; i++) {
+                        if (filename[i] == '.' && filename[i + 1] == 'y' && filename[i + 2] == 'a' && filename[i + 3] == '3') {
+                            tmpString.append(".ya3");
+                            break;
+                        }
+                        tmpString.push_back(filename[i]);
+                    }
+
+                    isValidName = tmpString.length() >= 5 && tmpString.substr(tmpString.length() - 4) == ".ya3";*/
+
+                    isValidName = true;
+
+                    if (isValidName) {
+                        changePixelColor(inputFilename, x, y, r, g, b, a);
+                        pixelShapes = loadFile(inputFilename, imageWidth, imageHeight);
+                        ChangePixelColor = false;
+                        renderFile = true;  // Включаем рендеринг
+                    }
+                }
+
+                ImGui::End();
+            }
+
 
             // Если пользователь выбрал чтение файла
             if (ReadFile) {
@@ -570,25 +965,24 @@ int main() {
                     ReadFile = false;
                     CreateFile = false;
                     ScaleFile = false;
+                    AdjustContrast = false;
                     pixelShapes.clear(); // Очищаем пиксели
                 }
 
-                ImGui::InputText("File Name", &filename[0], filename.size()+1);
-                
+                ImGui::InputText("File Name", &filename[0], filename.size() + 1);
+
                 if (ImGui::Button("Done!")) {
-					std::string tmpString;
+                    std::string tmpString;
                     bool fl = true;
-                    for (int i = 0; i < filename.length()-4; i++) {
-
-                        if(filename[i] == '.' && filename[i+1] == 'y'&& filename[i+2] == 'a'&& filename[i+3] == '3'){
-
+                    for (int i = 0; i < filename.length() - 4; i++) {
+                        if (filename[i] == '.' && filename[i + 1] == 'y' && filename[i + 2] == 'a' && filename[i + 3] == '3') {
                             tmpString.append(".ya3");
                             break;
                         }
                         tmpString.push_back(filename[i]);
                     }
-                    
-					isValidName = tmpString.length() >= 5 && tmpString.substr(tmpString.length() - 4) == ".ya3";
+
+                    isValidName = tmpString.length() >= 5 && tmpString.substr(tmpString.length() - 4) == ".ya3";
                     int ts = tmpString.length();
                     if (isValidName) {
                         std::ifstream file1(filename, std::ios::binary);
@@ -602,14 +996,12 @@ int main() {
                             pixelShapes = loadFile(tmpString, imageWidth, imageHeight);
                             renderFile = true;  // Включаем рендеринг
                         }
-                        
                     }
-           
                 }
 
-				if (isValidName == false) {
-					ImGui::TextColored(ImVec4(1, 0, 0, 1), "File not exist OR Please enter a valid filename with '.ya3' extension.");
-				}
+                if (isValidName == false) {
+                    ImGui::TextColored(ImVec4(1, 0, 0, 1), "File not exist OR Please enter a valid filename with '.ya3' extension.");
+                }
 
                 ImGui::End();
             }
