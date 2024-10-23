@@ -112,6 +112,8 @@ std::vector<sf::RectangleShape> loadFile(const std::string& filename, uint16_t& 
         tmpScale = scales[0];
     }
 
+    tmpScale = scale;
+
 
     for (int i = 0; i < ((width/tmpScale) * (height/tmpScale)) - 1; i++) {
         float x = readNumber<float>(file);
@@ -239,8 +241,14 @@ std::vector<sf::RectangleShape> loadFile(const std::string& filename, uint16_t& 
         pixelPos.y = recoloredPixels[i].y;
 
         int tm1 = 0, tm2 = 0;
-        while (tm1 != (int)pixelPos.x && tm2 != (int)pixelPos.y)
+        bool fl = true;
+        while (fl)
         {
+            if (tm1 == (int)pixelPos.x && tm2 == (int)pixelPos.y) {
+                fl = false;
+                break;
+            }
+
 
             if (tm1 == id1) {
                 tm1 = 0;
@@ -250,6 +258,7 @@ std::vector<sf::RectangleShape> loadFile(const std::string& filename, uint16_t& 
             if (tm1 > id1 || tm2 > id2) {
                 break;
             }
+            tm1++;
             id++;
         }
 
@@ -275,6 +284,18 @@ void adjustContrast(const std::string& inputFilename, const std::string& outputF
     uint8_t bitsPerPixel = readNumber<uint8_t>(inputFile);
     uint16_t paletteEntries = readNumber<uint16_t>(inputFile);
 
+    std::vector<sf::Vector2f> recoloredPixels;
+    std::vector<std::vector<int>> newColors;
+
+    std::vector<uint16_t> angles(paletteEntries);
+    std::vector<uint8_t> rValues(paletteEntries);
+    std::vector<uint8_t> gValues(paletteEntries);
+    std::vector<uint8_t> bValues(paletteEntries);
+    std::vector<uint8_t> aValues(paletteEntries);
+
+    int id = 0;
+
+    // Чтение палитры
     std::vector<PaletteEntry> palette(paletteEntries);
     for (auto& entry : palette) {
         entry.angle = readNumber<uint16_t>(inputFile);
@@ -283,19 +304,59 @@ void adjustContrast(const std::string& inputFilename, const std::string& outputF
         entry.g = readNumber<uint8_t>(inputFile);
         entry.b = readNumber<uint8_t>(inputFile);
         entry.a = readNumber<uint8_t>(inputFile);
+
+        angles[id] = entry.angle;
+        rValues[id] = entry.r;
+        gValues[id] = entry.g;
+        bValues[id] = entry.b;
+        aValues[id] = entry.a;
+        id++;
     }
 
-    uint16_t scale;
-
-    // Чтение пикселей
+    // Чтение координат пикселей
     std::vector<sf::Vector2f> pixels;
+    std::vector<int> scales;
+    std::vector<int> newScales;
+    int tmpScale = 1;
+
+
+    float x = readNumber<float>(inputFile);
+    float y = readNumber<float>(inputFile);
+    int scale = readNumber<uint16_t>(inputFile);
+    if (inputFile) {
+        pixels.emplace_back(x, y);
+        scales.emplace_back(scale);
+        tmpScale = scales[0];
+    }
+
+    tmpScale = scale;
+
+
+    for (int i = 0; i < ((width / tmpScale) * (height / tmpScale)) - 1; i++) {
+        float x = readNumber<float>(inputFile);
+        float y = readNumber<float>(inputFile);
+        int scale = readNumber<uint16_t>(inputFile);
+        if (inputFile) {
+            pixels.emplace_back(x, y);
+            scales.emplace_back(scale);
+            tmpScale = scales[0];
+        }
+    }
+
     while (inputFile) {
         float x = readNumber<float>(inputFile);
         float y = readNumber<float>(inputFile);
-        uint16_t tmpScale = readNumber<uint16_t>(inputFile);
+        int scale = readNumber<uint16_t>(inputFile);
+
+        int r = readNumber<uint8_t>(inputFile);
+        int g = readNumber<uint8_t>(inputFile);
+        int b = readNumber<uint8_t>(inputFile);
+        int a = readNumber<uint8_t>(inputFile);
+
         if (inputFile) {
-            pixels.emplace_back(x, y);
-            scale = tmpScale;
+            recoloredPixels.emplace_back(x, y);
+            newScales.emplace_back(scale);
+            newColors.push_back({ r, g, b, a });
         }
     }
     inputFile.close();
@@ -308,12 +369,22 @@ void adjustContrast(const std::string& inputFilename, const std::string& outputF
         // 
     }
 
+
+    for (size_t i = 0; i < newColors.size(); ++i) {
+        newColors[i][0] = clamp<int>((((newColors[i][0] - 128) * contrastFactor) + 128), 0, 255);
+        newColors[i][1] = clamp<int>((((newColors[i][1] - 128) * contrastFactor) + 128), 0, 255);
+        newColors[i][2] = clamp<int>((((newColors[i][2] - 128) * contrastFactor) + 128), 0, 255);
+        newColors[i][3] = clamp<int>((((newColors[i][3] - 128) * contrastFactor) + 128), 0, 255);
+    }
+
     // Запись в новый файл
     std::ofstream outputFile(outputFilename, std::ios::binary);
     if (!outputFile) {
         std::cerr << "Не удалось создать выходной файл." << std::endl;
         return;
     }
+
+
 
     writeNumber(outputFile, width);
     writeNumber(outputFile, height);
@@ -329,10 +400,21 @@ void adjustContrast(const std::string& inputFilename, const std::string& outputF
         writeNumber(outputFile, static_cast<uint8_t>(entry.a));
     }
 
-    for (const auto& pixel : pixels) {
-        writeNumber(outputFile, pixel.x);
-        writeNumber(outputFile, pixel.y);
-        writeNumber(outputFile, (uint16_t)(scale));
+    for (size_t i = 0; i < pixels.size(); ++i) {
+        writeNumber(outputFile, pixels[i].x);
+        writeNumber(outputFile, pixels[i].y);
+        writeNumber(outputFile, static_cast<uint16_t>(scales[i]));
+    }
+
+    for (size_t i = 0; i < recoloredPixels.size(); ++i) {
+        writeNumber(outputFile, recoloredPixels[i].x);
+        writeNumber(outputFile, recoloredPixels[i].y);
+        writeNumber(outputFile, static_cast<uint16_t>(newScales[i]));
+
+        writeNumber(outputFile, static_cast<uint8_t>(newColors[i][0]));
+        writeNumber(outputFile, static_cast<uint8_t>(newColors[i][1]));
+        writeNumber(outputFile, static_cast<uint8_t>(newColors[i][2]));
+        writeNumber(outputFile, static_cast<uint8_t>(newColors[i][3]));
     }
 
     outputFile.close();
@@ -560,6 +642,92 @@ void changePixelColor(const std::string& filename, float _x, float _y, int _r, i
 }
 
 
+void generatePattern(const std::string& outputFilename, int width, int height, const std::string& patternType) {
+    std::ofstream file(outputFilename, std::ios::binary);
+    if (!file) {
+        std::cerr << "Не удалось создать выходной файл." << std::endl;
+        return;
+    }
+
+    int scale = 20;
+
+    width = width * scale;
+    height = height * scale;
+
+    // Запись параметров изображения
+    writeNumber(file, static_cast<uint16_t>(width));
+    writeNumber(file, static_cast<uint16_t>(height));
+    writeNumber(file, static_cast<uint8_t>(24)); 
+    writeNumber(file, static_cast<uint16_t>(1)); 
+
+    
+    writeNumber(file, static_cast<uint16_t>(360));
+    writeNumber(file, static_cast<uint16_t>(15));
+    writeNumber(file, static_cast<uint8_t>(255));
+    writeNumber(file, static_cast<uint8_t>(255));
+    writeNumber(file, static_cast<uint8_t>(255));
+    writeNumber(file, static_cast<uint8_t>(255));
+    
+
+
+    for (size_t i = 0; i < (width/scale) * (height/scale); ++i) {
+        writeNumber(file, 0.0f);
+        writeNumber(file, 0.0f);
+        writeNumber(file, static_cast<uint16_t>(20));
+    }
+
+
+
+    // Генерация узора
+    std::vector<sf::Vector2f> pixels;
+    std::vector<int> scales;
+    std::vector<std::vector<int>> colors;
+
+    /*if (patternType == "tiles") {
+        int tileSize = 20;
+        for (int y = 0; y < height; y += 20) {
+            for (int x = 0; x < width; x += 20) {
+                pixels.emplace_back(static_cast<float>(x), static_cast<float>(y));
+                scales.push_back(tileSize);
+                colors.push_back({ (x / tileSize) % 2 == 0 ? 255 : 0, (y / tileSize) % 2 == 0 ? 255 : 0, 0, 255 });
+            }
+        }
+    }
+    else if (patternType == "circles") {
+        int circleRadius = 20;
+        for (int y = 0; y < height; y += circleRadius * 2) {
+            for (int x = 0; x < width; x += circleRadius * 2) {
+                pixels.emplace_back(static_cast<float>(x + circleRadius), static_cast<float>(y + circleRadius));
+                scales.push_back(circleRadius);
+                colors.push_back({ 255, 0, 0, 255 });
+            }
+        }
+    }*/
+    if (patternType == "gradient") {
+        for (int y = 0; y < height / scale; ++y) {
+            for (int x = 0; x < width / scale; ++x) {
+                pixels.emplace_back(static_cast<float>(x), static_cast<float>(y));
+                scales.push_back(scale);
+                colors.push_back({ static_cast<int>(255 * x / width), static_cast<int>(255 * y / height), 0, 255 });
+            }
+        }
+    }
+
+    // Запись пикселей в файл
+    for (size_t i = 0; i < pixels.size(); ++i) {
+        writeNumber(file, pixels[i].x);
+        writeNumber(file, pixels[i].y);
+        writeNumber(file, static_cast<uint16_t>(scales[i]));
+        writeNumber(file, static_cast<uint8_t>(colors[i][0]));
+        writeNumber(file, static_cast<uint8_t>(colors[i][1]));
+        writeNumber(file, static_cast<uint8_t>(colors[i][2]));
+        writeNumber(file, static_cast<uint8_t>(colors[i][3]));
+    }
+
+    file.close();
+}
+
+
 // Основной код UI и логики
 int main() {
     sf::RenderWindow window(sf::VideoMode::getDesktopMode(), "Lab2_GUI", sf::Style::Default);
@@ -579,6 +747,7 @@ int main() {
     bool ScaleFile = false;
     bool AdjustContrast = false;
     bool ChangePixelColor = false;
+    bool GeneratePattern = false;
 
     bool isPalletSet = false;
     bool isSizeSet = false;
@@ -636,7 +805,7 @@ int main() {
         }
         else {
             // Основное меню
-            if (!CreateFile && !ReadFile && !ScaleFile && !AdjustContrast && !ChangePixelColor) {
+            if (!CreateFile && !ReadFile && !ScaleFile && !AdjustContrast && !ChangePixelColor && !GeneratePattern) {
                 ImGui::Begin("Main Menu");
                 if (ImGui::Button("Create File")) {
                     // Сбрасываем данные для создания файла
@@ -668,6 +837,12 @@ int main() {
                     outputFilename = "example.ya3";
                     inputFilename = "example.ya3";
                     ChangePixelColor = true;
+                }
+                if (ImGui::Button("Generate Pattern")) {
+                    outputFilename = "example.ya";
+                    width = 1000;
+                    height = 1000;
+                    GeneratePattern = true;
                 }
                 ImGui::End();
             }
@@ -702,7 +877,7 @@ int main() {
                     }
                     isSizeSet = true;
                 }
-                ImGui::InputInt("Bits Per Pixel", &bitsPerPixel);
+                //ImGui::InputInt("Bits Per Pixel", &bitsPerPixel);
                 if (ImGui::InputInt("Palette Entries", &paletteEntries)) {
                     isPalletSet = false;
                 }
@@ -948,6 +1123,58 @@ int main() {
                         changePixelColor(inputFilename, x, y, r, g, b, a);
                         pixelShapes = loadFile(inputFilename, imageWidth, imageHeight);
                         ChangePixelColor = false;
+                        renderFile = true;  // Включаем рендеринг
+                    }
+                }
+
+                ImGui::End();
+            }
+
+            if (GeneratePattern) {
+                ImGui::Begin("Generate Pattern");
+
+                if (ImGui::Button("Back to menu")) {
+                    renderFile = false;  // Отключаем рендеринг
+                    ReadFile = false;
+                    CreateFile = false;
+                    ScaleFile = false;
+                    AdjustContrast = false;
+                    GeneratePattern = false;
+                    pixelShapes.clear(); // Очищаем пиксели
+                }
+
+                ImGui::InputText("Output File Name", &outputFilename[0], outputFilename.size() + 1);
+                if (!isValidOutputName) {
+                    ImGui::TextColored(ImVec4(1, 0, 0, 1), "Please enter a valid filename with '.ya3' extension.");
+                }
+
+                if (ImGui::InputInt("Width", &width)) {
+                    isSizeSet = false;
+                }
+                if (ImGui::InputInt("Height", &height)) {
+                    isSizeSet = false;
+                }
+
+                static const char* patternTypes[] = { "gradient" };
+                static int currentPatternType = 0;
+                ImGui::Combo("Pattern Type", &currentPatternType, patternTypes, IM_ARRAYSIZE(patternTypes));
+
+                if (ImGui::Button("Generate")) {
+                    std::string tmpString2;
+                    for (int i = 0; i < outputFilename.length() - 4; i++) {
+                        if (outputFilename[i] == '.' && outputFilename[i + 1] == 'y' && outputFilename[i + 2] == 'a' && outputFilename[i + 3] == '3') {
+                            tmpString2.append(".ya3");
+                            break;
+                        }
+                        tmpString2.push_back(outputFilename[i]);
+                    }
+
+                    isValidOutputName = tmpString2.length() >= 5 && tmpString2.substr(tmpString2.length() - 4) == ".ya3";
+
+                    if (isValidOutputName) {
+                        generatePattern(tmpString2, width, height, patternTypes[currentPatternType]);
+                        pixelShapes = loadFile(tmpString2, imageWidth, imageHeight);
+                        GeneratePattern = false;
                         renderFile = true;  // Включаем рендеринг
                     }
                 }
