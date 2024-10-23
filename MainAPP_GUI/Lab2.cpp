@@ -11,6 +11,9 @@
 #include <iomanip>
 #include <iostream>
 
+
+
+
 // Функция для записи числа
 template<typename T>
 void writeNumber(std::ofstream& file, T value) {
@@ -246,20 +249,26 @@ std::vector<sf::RectangleShape> loadFile(const std::string& filename, uint16_t& 
         {
             if (tm1 == (int)pixelPos.x && tm2 == (int)pixelPos.y) {
                 fl = false;
-                break;
             }
 
 
-            if (tm1 == id1) {
+            /*if (tm1 == id1) {
                 tm1 = 0;
                 tm2 ++;
-            }
+            }*/
 
-            if (tm1 > id1 || tm2 > id2) {
-                break;
+            if (fl){
+
+                if (tm1 > id1 || tm2 > id2) {
+                    break;
+                }
+                tm1++;
+                if (tm1 == id1) {
+                    tm1 = 0;
+                    tm2++;
+                }
+                id++;
             }
-            tm1++;
-            id++;
         }
 
         sf::Color color(newColors[i][0], newColors[i][1], newColors[i][2], newColors[i][3]);
@@ -445,16 +454,44 @@ void scaleImage(const std::string& inputFilename, const std::string& outputFilen
     }
 
     uint16_t scale;
-
     // Чтение пикселей
     std::vector<sf::Vector2f> pixels;
-    while (inputFile) {
+    std::vector<int> newScales;
+    std::vector<sf::Vector2f> recoloredPixels;
+    std::vector<std::vector<int>> newColors;
+
+    float x = readNumber<float>(inputFile);
+    float y = readNumber<float>(inputFile);
+    uint16_t tmpScale = readNumber<uint16_t>(inputFile);
+    if (inputFile) {
+        pixels.emplace_back(x, y);
+        scale = tmpScale;
+    }
+
+    for (size_t i = 0; i < ((width / scale) * (height / scale)) - 1; ++i) {
         float x = readNumber<float>(inputFile);
         float y = readNumber<float>(inputFile);
         uint16_t tmpScale = readNumber<uint16_t>(inputFile);
         if (inputFile) {
             pixels.emplace_back(x, y);
             scale = tmpScale;
+        }
+    }
+    
+    while (inputFile) {
+        float x = readNumber<float>(inputFile);
+        float y = readNumber<float>(inputFile);
+        int scale = readNumber<uint16_t>(inputFile);
+
+        int r = readNumber<uint8_t>(inputFile);
+        int g = readNumber<uint8_t>(inputFile);
+        int b = readNumber<uint8_t>(inputFile);
+        int a = readNumber<uint8_t>(inputFile);
+
+        if (inputFile) {
+            recoloredPixels.emplace_back(x, y);
+            newScales.emplace_back(scale);
+            newColors.push_back({ r, g, b, a });
         }
     }
     inputFile.close();
@@ -500,6 +537,17 @@ void scaleImage(const std::string& inputFilename, const std::string& outputFilen
         writeNumber(outputFile, pixel.y);
         writeNumber(outputFile, (uint16_t)(scaleFactor * (int)scale));
     }
+
+	for (size_t i = 0; i < recoloredPixels.size(); ++i) {
+		writeNumber(outputFile, recoloredPixels[i].x);
+		writeNumber(outputFile, recoloredPixels[i].y);
+		writeNumber(outputFile, static_cast<uint16_t>(newScales[i] * scaleFactor));
+
+		writeNumber(outputFile, static_cast<uint8_t>(newColors[i][0]));
+		writeNumber(outputFile, static_cast<uint8_t>(newColors[i][1]));
+		writeNumber(outputFile, static_cast<uint8_t>(newColors[i][2]));
+		writeNumber(outputFile, static_cast<uint8_t>(newColors[i][3]));
+	}
 
     outputFile.close();
 }
@@ -641,7 +689,6 @@ void changePixelColor(const std::string& filename, float _x, float _y, int _r, i
     outputFile.close();
 }
 
-
 void generatePattern(const std::string& outputFilename, int width, int height, const std::string& patternType) {
     std::ofstream file(outputFilename, std::ios::binary);
     if (!file) {
@@ -708,7 +755,7 @@ void generatePattern(const std::string& outputFilename, int width, int height, c
             for (int x = 0; x < width / scale; ++x) {
                 pixels.emplace_back(static_cast<float>(x), static_cast<float>(y));
                 scales.push_back(scale);
-                colors.push_back({ static_cast<int>(255 * x / width), static_cast<int>(255 * y / height), 0, 255 });
+                colors.push_back({ static_cast<int>(255 * x / (width / scale)), static_cast<int>(255 * y / (height / scale)), 0, 255 });
             }
         }
     }
@@ -727,6 +774,112 @@ void generatePattern(const std::string& outputFilename, int width, int height, c
     file.close();
 }
 
+void convertToJSON(const std::string& inputFilename, const std::string& outputFilename) {
+    std::ifstream inputFile(inputFilename, std::ios::binary);
+    if (!inputFile) {
+        std::cerr << "Не удалось открыть исходный файл." << std::endl;
+        return;
+    }
+
+    std::ofstream outputFile(outputFilename);
+    if (!outputFile) {
+        std::cerr << "Не удалось создать выходной файл." << std::endl;
+        return;
+    }
+
+    // Чтение заголовка
+    uint16_t width = readNumber<uint16_t>(inputFile);
+    uint16_t height = readNumber<uint16_t>(inputFile);
+    uint8_t bitsPerPixel = readNumber<uint8_t>(inputFile);
+    uint16_t paletteEntries = readNumber<uint16_t>(inputFile);
+
+    // Запись заголовка в JSON
+    outputFile << "{\n";
+    outputFile << "  \"Header\": {\n";
+    outputFile << "    \"Width\": " << width << ",\n";
+    outputFile << "    \"Height\": " << height << ",\n";
+    outputFile << "    \"BitsPerPixel\": " << static_cast<int>(bitsPerPixel) << ",\n";
+    outputFile << "    \"PaletteEntries\": " << paletteEntries << "\n";
+    outputFile << "  },\n";
+
+    // Запись палитры
+    outputFile << "  \"Palette\": [\n";
+    for (int i = 0; i < paletteEntries; ++i) {
+        uint16_t angle = readNumber<uint16_t>(inputFile);
+        uint16_t length = readNumber<uint16_t>(inputFile);
+        uint8_t r = readNumber<uint8_t>(inputFile);
+        uint8_t g = readNumber<uint8_t>(inputFile);
+        uint8_t b = readNumber<uint8_t>(inputFile);
+        uint8_t a = readNumber<uint8_t>(inputFile);
+
+        outputFile << "    {\n";
+        outputFile << "      \"Angle\": " << angle << ",\n";
+        outputFile << "      \"Length\": " << length << ",\n";
+        outputFile << "      \"Color\": { \"r\": " << static_cast<int>(r)
+            << ", \"g\": " << static_cast<int>(g)
+            << ", \"b\": " << static_cast<int>(b)
+            << ", \"a\": " << static_cast<int>(a) << " }\n";
+        outputFile << "    }";
+        if (i < paletteEntries - 1) outputFile << ",";
+        outputFile << "\n";
+    }
+    outputFile << "  ],\n";
+
+    // Запись пикселей
+    outputFile << "  \"Pixels\": [\n";
+    bool firstPixel = true;
+
+    float x = readNumber<float>(inputFile);
+    float y = readNumber<float>(inputFile);
+    uint16_t scale = readNumber<uint16_t>(inputFile);
+
+    outputFile << "    { \"x\": " << x << ", \"y\": " << y
+        << ", \"scale\": " << scale
+        << " }";
+
+    firstPixel = false;
+
+
+    for (size_t i = 0; i < ((width / scale) * (height / scale)) - 1; ++i) {
+        float x = readNumber<float>(inputFile);
+        float y = readNumber<float>(inputFile);
+        uint16_t scale = readNumber<uint16_t>(inputFile);
+
+        if (!firstPixel) outputFile << ",\n";
+        outputFile << "    { \"x\": " << x << ", \"y\": " << y
+            << ", \"scale\": " << scale << " }";
+    }
+    outputFile << "\n  ]\n";
+    outputFile << "}\n";
+
+    outputFile << "  \"RecoloredPixels\": [\n";
+
+    firstPixel = true;
+    while (inputFile) {
+        float x = readNumber<float>(inputFile);
+        float y = readNumber<float>(inputFile);
+        uint16_t scale = readNumber<uint16_t>(inputFile);
+        uint8_t r = readNumber<uint8_t>(inputFile);
+        uint8_t g = readNumber<uint8_t>(inputFile);
+        uint8_t b = readNumber<uint8_t>(inputFile);
+        uint8_t a = readNumber<uint8_t>(inputFile);
+
+        if (inputFile) {
+            if (!firstPixel) outputFile << ",\n";
+            outputFile << "    { \"x\": " << x << ", \"y\": " << y
+                << ", \"scale\": " << scale << ", \"r\": " << static_cast<int>(r)
+                << ", \"g\": " << static_cast<int>(g)
+                << ", \"b\": " << static_cast<int>(b)
+                << ", \"a\": " << static_cast<int>(a) << " }";
+        }
+        firstPixel = false;
+    }
+    outputFile << "\n  ]\n";
+    outputFile << "}\n";
+
+    inputFile.close();
+    outputFile.close();
+}
 
 // Основной код UI и логики
 int main() {
@@ -748,6 +901,7 @@ int main() {
     bool AdjustContrast = false;
     bool ChangePixelColor = false;
     bool GeneratePattern = false;
+    bool ConvertToJSON = false;
 
     bool isPalletSet = false;
     bool isSizeSet = false;
@@ -805,7 +959,7 @@ int main() {
         }
         else {
             // Основное меню
-            if (!CreateFile && !ReadFile && !ScaleFile && !AdjustContrast && !ChangePixelColor && !GeneratePattern) {
+            if (!CreateFile && !ReadFile && !ScaleFile && !AdjustContrast && !ChangePixelColor && !GeneratePattern && !ConvertToJSON) {
                 ImGui::Begin("Main Menu");
                 if (ImGui::Button("Create File")) {
                     // Сбрасываем данные для создания файла
@@ -839,10 +993,15 @@ int main() {
                     ChangePixelColor = true;
                 }
                 if (ImGui::Button("Generate Pattern")) {
-                    outputFilename = "example.ya";
+                    outputFilename = "example.ya3";
                     width = 1000;
                     height = 1000;
                     GeneratePattern = true;
+                }
+                if (ImGui::Button("Convert To JSON")) {
+                    inputFilename = "example.ya3";
+                    outputFilename = "example.json";
+                    ConvertToJSON = true;
                 }
                 ImGui::End();
             }
@@ -1176,6 +1335,51 @@ int main() {
                         pixelShapes = loadFile(tmpString2, imageWidth, imageHeight);
                         GeneratePattern = false;
                         renderFile = true;  // Включаем рендеринг
+                    }
+                }
+
+                ImGui::End();
+            }
+
+            if (ConvertToJSON) {
+                ImGui::Begin("Convert to JSON");
+
+                ImGui::InputText("Input File Name", &inputFilename[0], inputFilename.size() + 1);
+                if (!isValidInputName) {
+                    ImGui::TextColored(ImVec4(1, 0, 0, 1), "Please enter a valid filename with '.ya3' extension.");
+                }
+                ImGui::InputText("Output File Name", &outputFilename[0], outputFilename.size() + 1);
+                if (!isValidOutputName) {
+                    ImGui::TextColored(ImVec4(1, 0, 0, 1), "Please enter a valid filename with '.ya3' extension.");
+                }
+
+                
+                if (ImGui::Button("Done!")) {
+                    std::string tmpString;
+                    for (int i = 0; i < inputFilename.length() - 4; i++) {
+                        if (inputFilename[i] == '.' && inputFilename[i + 1] == 'y' && inputFilename[i + 2] == 'a' && inputFilename[i + 3] == '3') {
+                            tmpString.append(".ya3");
+                            break;
+                        }
+                        tmpString.push_back(inputFilename[i]);
+                    }
+
+                    isValidInputName = tmpString.length() >= 5 && tmpString.substr(tmpString.length() - 4) == ".ya3";
+
+                    std::string tmpString2;
+                    for (int i = 0; i < outputFilename.length() - 5; i++) {
+                        if (outputFilename[i] == '.' && outputFilename[i + 1] == 'j' && outputFilename[i + 2] == 's' && outputFilename[i + 3] == 'o' && outputFilename[i + 4] == 'n') {
+                            tmpString2.append(".json");
+                            break;
+                        }
+                        tmpString2.push_back(outputFilename[i]);
+                    }
+
+                    isValidOutputName = tmpString2.length() >= 5 && tmpString2.substr(tmpString2.length() - 5) == ".json";
+
+                    if (isValidInputName && isValidOutputName) {
+                        convertToJSON(tmpString, tmpString2);
+                        ConvertToJSON = false;
                     }
                 }
 
