@@ -278,7 +278,6 @@ std::vector<sf::RectangleShape> loadFile(const std::string& filename, uint16_t& 
 
     return pixelShapes;
 }
-
 // Функция для изменения контрастности
 void adjustContrast(const std::string& inputFilename, const std::string& outputFilename, float contrastFactor) {
     std::ifstream inputFile(inputFilename, std::ios::binary);
@@ -428,7 +427,7 @@ void adjustContrast(const std::string& inputFilename, const std::string& outputF
 
     outputFile.close();
 }
-
+// Функция для увеличения размеров изображения
 void scaleImage(const std::string& inputFilename, const std::string& outputFilename, int scaleFactor) {
     // Открытие исходного файла
     std::ifstream inputFile(inputFilename, std::ios::binary);
@@ -551,7 +550,6 @@ void scaleImage(const std::string& inputFilename, const std::string& outputFilen
 
     outputFile.close();
 }
-
 // Функция для изменения цвета пикселя в указанных координатах
 void changePixelColor(const std::string& filename, float _x, float _y, int _r, int _g, int _b, int _a) {
     std::ifstream inputFile(filename, std::ios::binary);
@@ -688,7 +686,7 @@ void changePixelColor(const std::string& filename, float _x, float _y, int _r, i
 
     outputFile.close();
 }
-
+// Функция для генерации узора
 void generatePattern(const std::string& outputFilename, int width, int height, const std::string& patternType) {
     std::ofstream file(outputFilename, std::ios::binary);
     if (!file) {
@@ -773,7 +771,7 @@ void generatePattern(const std::string& outputFilename, int width, int height, c
 
     file.close();
 }
-
+// Функция для конвертации в JSON
 void convertToJSON(const std::string& inputFilename, const std::string& outputFilename) {
     std::ifstream inputFile(inputFilename, std::ios::binary);
     if (!inputFile) {
@@ -849,8 +847,8 @@ void convertToJSON(const std::string& inputFilename, const std::string& outputFi
         outputFile << "    { \"x\": " << x << ", \"y\": " << y
             << ", \"scale\": " << scale << " }";
     }
-    outputFile << "\n  ]\n";
-    outputFile << "}\n";
+    outputFile << "\n  ],\n";
+    
 
     outputFile << "  \"RecoloredPixels\": [\n";
 
@@ -902,9 +900,11 @@ int main() {
     bool ChangePixelColor = false;
     bool GeneratePattern = false;
     bool ConvertToJSON = false;
+    bool ChangePallet = false;
 
     bool isPalletSet = false;
     bool isSizeSet = false;
+    bool isPalletLoad = false;
 
     bool pixelsNotEmpty = false;
 
@@ -927,6 +927,14 @@ int main() {
     std::vector<PaletteEntry> palette;
     std::vector<sf::Vector2f> pixels;
     std::vector<int> scales;
+
+
+    uint16_t _Scale;
+    // Чтение пикселей
+    //std::vector<sf::Vector2f> pixels;
+    std::vector<int> newScales;
+    std::vector<sf::Vector2f> recoloredPixels;
+    std::vector<std::vector<int>> newColors;
 
     // Основной цикл приложения
     sf::Clock deltaClock;
@@ -959,7 +967,7 @@ int main() {
         }
         else {
             // Основное меню
-            if (!CreateFile && !ReadFile && !ScaleFile && !AdjustContrast && !ChangePixelColor && !GeneratePattern && !ConvertToJSON) {
+            if (!CreateFile && !ReadFile && !ScaleFile && !AdjustContrast && !ChangePixelColor && !GeneratePattern && !ConvertToJSON && !ChangePallet && !isPalletLoad) {
                 ImGui::Begin("Main Menu");
                 if (ImGui::Button("Create File")) {
                     // Сбрасываем данные для создания файла
@@ -969,6 +977,10 @@ int main() {
                     outputFilename = "example.ya3";
                     palette.clear();
                     pixels.clear();
+                    scales.clear();
+                    newScales.clear();
+                    recoloredPixels.clear();
+                    newColors.clear();
 
                     CreateFile = true;
                 }
@@ -1002,6 +1014,17 @@ int main() {
                     inputFilename = "example.ya3";
                     outputFilename = "example.json";
                     ConvertToJSON = true;
+                }
+                if (ImGui::Button("Change Palette")) {
+                    inputFilename = "example.ya3";
+                    outputFilename = "example.json";
+                    ChangePallet = true;
+                    palette.clear();
+                    pixels.clear();
+                    scales.clear();
+                    newScales.clear();
+                    recoloredPixels.clear();
+                    newColors.clear();
                 }
                 ImGui::End();
             }
@@ -1343,6 +1366,16 @@ int main() {
 
             if (ConvertToJSON) {
                 ImGui::Begin("Convert to JSON");
+                if (ImGui::Button("Back to menu")) {
+                    renderFile = false;  // Отключаем рендеринг
+                    ReadFile = false;
+                    CreateFile = false;
+                    ScaleFile = false;
+                    AdjustContrast = false;
+                    GeneratePattern = false;
+                    ConvertToJSON = false;
+                    pixelShapes.clear(); // Очищаем пиксели
+                }
 
                 ImGui::InputText("Input File Name", &inputFilename[0], inputFilename.size() + 1);
                 if (!isValidInputName) {
@@ -1386,6 +1419,166 @@ int main() {
                 ImGui::End();
             }
 
+            if (ChangePallet) {
+                ImGui::Begin("ChangePallet");
+
+                if (ImGui::Button("Back to menu")) {
+                    renderFile = false;  // Отключаем рендеринг
+                    ReadFile = false;
+                    CreateFile = false;
+                    ScaleFile = false;
+                    AdjustContrast = false;
+                    GeneratePattern = false;
+                    ConvertToJSON = false;
+                    ChangePallet = false;
+                    pixelShapes.clear(); // Очищаем пиксели
+                }
+
+                ImGui::InputText("Input File Name", &inputFilename[0], inputFilename.size() + 1);
+                if (!isValidInputName) {
+                    ImGui::TextColored(ImVec4(1, 0, 0, 1), "Please enter a valid filename with '.ya3' extension.");
+                }
+
+                if (ImGui::Button("Done!")) {
+                    std::string tmpString;
+                    for (int i = 0; i < inputFilename.length() - 4; i++) {
+                        if (inputFilename[i] == '.' && inputFilename[i + 1] == 'y' && inputFilename[i + 2] == 'a' && inputFilename[i + 3] == '3') {
+                            tmpString.append(".ya3");
+                            break;
+                        }
+                        tmpString.push_back(inputFilename[i]);
+                    }
+
+                    isValidInputName = tmpString.length() >= 5 && tmpString.substr(tmpString.length() - 4) == ".ya3";
+
+                    if (isValidInputName) {
+                        ChangePallet = false;
+
+                        std::ifstream file(tmpString, std::ios::binary);
+
+                        width = readNumber<uint16_t>(file);
+                        height = readNumber<uint16_t>(file);
+                        bitsPerPixel = readNumber<uint8_t>(file);
+                        paletteEntries = readNumber<uint16_t>(file);
+
+                        palette.resize(paletteEntries);
+
+                        for (auto& entry : palette) {
+                            entry.angle = readNumber<uint16_t>(file);
+                            entry.length = readNumber<uint16_t>(file);
+                            entry.r = readNumber<uint8_t>(file);
+                            entry.g = readNumber<uint8_t>(file);
+                            entry.b = readNumber<uint8_t>(file);
+                            entry.a = readNumber<uint8_t>(file);
+                        }
+                        
+
+                        float x = readNumber<float>(file);
+                        float y = readNumber<float>(file);
+                        uint16_t tmpScale = readNumber<uint16_t>(file);
+                        if (file) {
+                            pixels.emplace_back(x, y);
+                            _Scale = tmpScale;
+                        }
+
+                        for (size_t i = 0; i < ((width / scale) * (height / scale)) - 1; ++i) {
+                            float x = readNumber<float>(file);
+                            float y = readNumber<float>(file);
+                            uint16_t tmpScale = readNumber<uint16_t>(file);
+                            if (file) {
+                                pixels.emplace_back(x, y);
+                                _Scale = tmpScale;
+                            }
+                        }
+
+                        while (file) {
+                            float x = readNumber<float>(file);
+                            float y = readNumber<float>(file);
+                            int tmscale = readNumber<uint16_t>(file);
+
+                            int r = readNumber<uint8_t>(file);
+                            int g = readNumber<uint8_t>(file);
+                            int b = readNumber<uint8_t>(file);
+                            int a = readNumber<uint8_t>(file);
+
+                            if (file) {
+                                recoloredPixels.emplace_back(x, y);
+                                newScales.emplace_back(tmscale);
+                                newColors.push_back({ r, g, b, a });
+                            }
+                        }
+                        file.close();
+
+                        outputFilename = tmpString;
+                        isPalletLoad = true;
+                    }
+                }
+
+
+                ImGui::End();
+            }
+
+            if (isPalletLoad) {
+                ImGui::Begin("Change Pallet");
+
+                for (size_t i = 0; i < paletteEntries; ++i){
+                    ImGui::Text("Palette Entry %d", i + 1);
+
+                    // Уникальные метки для каждого элемента
+                    ImGui::InputInt(("Angle " + std::to_string(i + 1)).c_str(), &palette[i].angle);
+                    ImGui::InputInt(("R " + std::to_string(i + 1)).c_str(), &palette[i].r);
+                    ImGui::InputInt(("G " + std::to_string(i + 1)).c_str(), &palette[i].g);
+                    ImGui::InputInt(("B " + std::to_string(i + 1)).c_str(), &palette[i].b);
+                    ImGui::InputInt(("A " + std::to_string(i + 1)).c_str(), &palette[i].a);
+                }
+                
+                if (ImGui::Button("Done!")) {
+
+                    std::ofstream file(outputFilename, std::ios::binary);
+                    if (file) {
+                        writeNumber(file, (uint16_t)width);
+                        writeNumber(file, (uint16_t)height);
+                        writeNumber(file, (uint8_t)bitsPerPixel);
+                        writeNumber(file, (uint16_t)paletteEntries);
+
+                        for (const auto& entry : palette) {
+                            writeNumber(file, (uint16_t)entry.angle);
+                            writeNumber(file, (uint16_t)entry.length);
+                            writeNumber(file, (uint8_t)entry.r);
+                            writeNumber(file, (uint8_t)entry.g);
+                            writeNumber(file, (uint8_t)entry.b);
+                            writeNumber(file, (uint8_t)entry.a);
+                        }
+
+                        for (size_t i = 0; i < pixels.size(); ++i) {
+                            writeNumber(file, pixels[i].x);
+                            writeNumber(file, pixels[i].y);
+                            writeNumber(file, static_cast<uint16_t>(_Scale));
+                        }
+
+                        for (size_t i = 0; i < recoloredPixels.size(); ++i) {
+                            writeNumber(file, recoloredPixels[i].x);
+                            writeNumber(file, recoloredPixels[i].y);
+                            writeNumber(file, static_cast<uint16_t>(_Scale));
+
+                            writeNumber(file, static_cast<uint8_t>(newColors[i][0]));
+                            writeNumber(file, static_cast<uint8_t>(newColors[i][1]));
+                            writeNumber(file, static_cast<uint8_t>(newColors[i][2]));
+                            writeNumber(file, static_cast<uint8_t>(newColors[i][3]));
+                        }
+
+                        file.close();
+
+                        pixelShapes = loadFile(outputFilename, imageWidth, imageHeight);
+                        renderFile = true;  // Включаем рендеринг
+                    }
+
+
+                    isPalletLoad = false;
+                }
+
+                ImGui::End();
+            }
 
             // Если пользователь выбрал чтение файла
             if (ReadFile) {
